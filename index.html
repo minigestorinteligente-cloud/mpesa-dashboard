@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M-Pesa Dashboard — Ngombenene</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; color: #ccc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+  .header { background: #111; border-bottom: 0.5px solid #222; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header-title { font-size: 16px; font-weight: 500; color: #fff; }
+  .header-sub { font-size: 12px; color: #555; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .refresh-btn { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 0.5px solid #333; background: #1a1a1a; color: #888; cursor: pointer; }
+  .refresh-btn:hover { border-color: #555; color: #ccc; }
+  .status { font-size: 11px; color: #555; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .loading { text-align: center; padding: 80px; color: #444; font-size: 14px; }
+  .error { background: #1a0a0a; border: 0.5px solid #3a1a1a; border-radius: 8px; padding: 16px; color: #f09595; font-size: 13px; margin: 24px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .metric { background: #141414; border-radius: 8px; padding: 14px 16px; border: 0.5px solid #1e1e1e; }
+  .metric-label { font-size: 11px; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-value { font-size: 20px; font-weight: 500; }
+  .filters-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; align-items: flex-start; }
+  .filter-group { display: flex; flex-direction: column; gap: 6px; }
+  .filter-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 4px 12px; border-radius: 20px; border: 0.5px solid #2a2a2a; background: #141414; color: #666; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .pill.active { background: #1e1e1e; color: #fff; border-color: #444; }
+  .pill:hover { border-color: #444; color: #bbb; }
+  .section-title { font-size: 11px; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-1 { margin-bottom: 16px; }
+  .card { background: #111; border-radius: 10px; border: 0.5px solid #1e1e1e; padding: 20px; }
+  .chart-wrap { position: relative; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .legend span { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; font-weight: 500; color: #444; border-bottom: 0.5px solid #1e1e1e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td { padding: 9px 12px; border-bottom: 0.5px solid #161616; color: #bbb; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #141414; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+  .dir-credit { color: #1D9E75; }
+  .dir-debit { color: #D85A30; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } .container { padding: 16px; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">M-Pesa Dashboard</div>
+    <div class="header-sub">Ngombenene · Vodacom Tanzania · TZS</div>
+  </div>
+  <div class="header-right">
+    <span class="status" id="status">Cargando...</span>
+    <button class="refresh-btn" onclick="loadData()">Actualizar</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="loading" id="loading">Cargando datos desde Google Sheets...</div>
+  <div id="dashboard" style="display:none">
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="filters-row">
+      <div class="filter-group">
+        <div class="filter-label">Mes</div>
+        <div class="filter-pills" id="filter-months"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Categoría</div>
+        <div class="filter-pills" id="filter-cats"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Contraparte</div>
+        <div class="filter-pills" id="filter-cp"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Dirección</div>
+        <div class="filter-pills" id="filter-dir"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <p class="section-title">Gastos por categoría</p>
+        <div class="chart-wrap" style="height:220px"><canvas id="catChart" role="img" aria-label="Gastos por categoría"></canvas></div>
+      </div>
+      <div class="card">
+        <p class="section-title">Flujo de caja mensual</p>
+        <div class="legend">
+          <span><span class="legend-dot" style="background:#1D9E75"></span>Entradas</span>
+          <span><span class="legend-dot" style="background:#D85A30"></span>Salidas</span>
+        </div>
+        <div class="chart-wrap" style="height:200px"><canvas id="flowChart" role="img" aria-label="Flujo mensual"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-1">
+      <div class="card">
+        <p class="section-title">Balance histórico</p>
+        <div class="chart-wrap" style="height:180px"><canvas id="balChart" role="img" aria-label="Balance histórico"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="section-title">Transacciones</p>
+      <div class="table-wrap">
+        <table id="txTable">
+          <thead><tr>
+            <th>Fecha</th><th>Hora</th><th>Categoría</th><th>Contraparte</th><th>Descripción</th><th>Dir</th><th style="text-align:right">Monto</th><th style="text-align:right">Balance</th>
+          </tr></thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SHEET_ID = '1sLCZ1vjBhuZVqjVaTTmZqD8G7xzh77J_7a88F7m1-Cg';
+const SHEET_NAME = 'MPESA_MOVEMENTS';
+const API_KEY = 'AIzaSyDDEbanKz4Pa8TZXJT8n4SeF0fbhW2NVVQ';
+
+const CAT_COLORS = {
+  BUNDLES:'#378ADD', LOAN_REPAYMENT:'#D85A30', LOAN_DRAWDOWN:'#BA7517',
+  WITHDRAWAL:'#639922', TRANSFER_OUT:'#D4537E', MICROFINANCE_IN:'#1D9E75',
+  BILL_PAYMENT:'#7F77DD', DEPOSIT:'#888780', LOYALTY:'#5DCAA5', OTHER:'#555'
+};
+
+let ALL_DATA = [];
+let activeMonths = new Set(['all']);
+let activeCats = new Set(['all']);
+let activeCPs = new Set(['all']);
+let activeDirs = new Set(['all']);
+let catChart, flowChart, balChart;
+
+function fmt(n){ return Math.round(Number(n)||0).toLocaleString(); }
+function getMonth(d){ return (d.date||'').substring(0,7); }
+
+async function loadData() {
+  document.getElementById('status').textContent = 'Actualizando...';
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}?key=${API_KEY}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const rows = json.values || [];
+    if (rows.length < 2) throw new Error('Sin datos');
+    const headers = rows[0].map(h => h.trim().toLowerCase());
+    ALL_DATA = rows.slice(1).map(row => {
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = row[i] || '');
+      return obj;
+    }).filter(r => r.date);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('status').textContent = `${ALL_DATA.length} transacciones · ${new Date().toLocaleTimeString()}`;
+    buildFilters();
+    render();
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `<div class="error">Error al cargar datos: ${e.message}<br><small>Verifica que la hoja sea pública y la API Key sea correcta.</small></div>`;
+    document.getElementById('status').textContent = 'Error';
+  }
+}
+
+function filtered() {
+  return ALL_DATA.filter(r => {
+    const m = getMonth(r);
+    const monthOk = activeMonths.has('all') || activeMonths.has(m);
+    const catOk = activeCats.has('all') || activeCats.has(r.category);
+    const cpOk = activeCPs.has('all') || activeCPs.has(r.counterparty_name);
+    const dirOk = activeDirs.has('all') || activeDirs.has(r.direction);
+    return monthOk && catOk && cpOk && dirOk;
+  });
+}
+
+function buildPills(containerId, values, activeSet, onToggle) {
+  const div = document.getElementById(containerId);
+  div.innerHTML = '';
+  const all = document.createElement('span');
+  all.className = 'pill' + (activeSet.has('all') ? ' active' : '');
+  all.textContent = 'Todos';
+  all.onclick = () => { activeSet.clear(); activeSet.add('all'); buildFilters(); render(); };
+  div.appendChild(all);
+  values.forEach(v => {
+    if (!v) return;
+    const p = document.createElement('span');
+    p.className = 'pill' + (activeSet.has(v) ? ' active' : '');
+    p.textContent = v;
+    p.onclick = () => {
+      activeSet.delete('all');
+      if (activeSet.has(v)) { activeSet.delete(v); if (activeSet.size === 0) activeSet.add('all'); }
+      else activeSet.add(v);
+      buildFilters(); render();
+    };
+    div.appendChild(p);
+  });
+}
+
+function buildFilters() {
+  const months = [...new Set(ALL_DATA.map(getMonth))].filter(Boolean).sort();
+  const cats = [...new Set(ALL_DATA.map(r => r.category))].filter(Boolean).sort();
+  const cps = [...new Set(ALL_DATA.map(r => r.counterparty_name))].filter(Boolean).sort();
+  buildPills('filter-months', months, activeMonths);
+  buildPills('filter-cats', cats, activeCats);
+  buildPills('filter-cp', cps, activeCPs);
+  buildPills('filter-dir', ['CREDIT','DEBIT'], activeDirs);
+}
+
+function darkScales() {
+  return {
+    x: { ticks:{color:'#555',font:{size:11}}, grid:{color:'rgba(255,255,255,0.04)'}, border:{color:'#222'} },
+    y: { ticks:{color:'#555',font:{size:11}, callback: v => 'TZS '+fmt(v)}, grid:{color:'rgba(255,255,255,0.04)'}, border:{color:'#222'} }
+  };
+}
+
+function render() {
+  const data = filtered();
+  const credits = data.filter(r=>r.direction==='CREDIT').reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const debits = data.filter(r=>r.direction==='DEBIT').reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const net = credits - debits;
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">Entradas</div><div class="metric-value" style="color:#1D9E75">TZS ${fmt(credits)}</div></div>
+    <div class="metric"><div class="metric-label">Salidas</div><div class="metric-value" style="color:#D85A30">TZS ${fmt(debits)}</div></div>
+    <div class="metric"><div class="metric-label">Balance neto</div><div class="metric-value" style="color:${net>=0?'#1D9E75':'#D85A30'}">${net>=0?'+':''}TZS ${fmt(net)}</div></div>
+    <div class="metric"><div class="metric-label">Transacciones</div><div class="metric-value" style="color:#fff">${data.length}</div></div>
+  `;
+
+  const catMap = {};
+  data.filter(r=>r.direction==='DEBIT').forEach(r => {
+    const c = r.category || 'OTHER';
+    if (!catMap[c]) catMap[c] = 0;
+    catMap[c] += Number(r.amount)||0;
+  });
+  const catSorted = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+
+  if (catChart) catChart.destroy();
+  catChart = new Chart(document.getElementById('catChart'), {
+    type: 'bar',
+    data: { labels: catSorted.map(c=>c[0]), datasets: [{ data: catSorted.map(c=>c[1]), backgroundColor: catSorted.map(c=>CAT_COLORS[c[0]]||'#555'), borderRadius: 4 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { ...darkScales(), x: { ...darkScales().x, ticks: { ...darkScales().x.ticks, maxRotation:30, autoSkip:false } } }
+    }
+  });
+
+  const months = [...new Set(ALL_DATA.map(getMonth))].filter(Boolean).sort();
+  const mC = months.map(m => ALL_DATA.filter(r=>getMonth(r)===m&&r.direction==='CREDIT').reduce((s,r)=>s+(Number(r.amount)||0),0));
+  const mD = months.map(m => ALL_DATA.filter(r=>getMonth(r)===m&&r.direction==='DEBIT').reduce((s,r)=>s+(Number(r.amount)||0),0));
+
+  if (flowChart) flowChart.destroy();
+  flowChart = new Chart(document.getElementById('flowChart'), {
+    type: 'bar',
+    data: { labels: months, datasets: [
+      { label:'Entradas', data:mC, backgroundColor:'#1D9E75', borderRadius:3 },
+      { label:'Salidas', data:mD, backgroundColor:'#D85A30', borderRadius:3 }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { ...darkScales(), x: { ...darkScales().x, ticks: { ...darkScales().x.ticks, autoSkip:false } } }
+    }
+  });
+
+  const sorted = [...ALL_DATA].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  if (balChart) balChart.destroy();
+  balChart = new Chart(document.getElementById('balChart'), {
+    type: 'line',
+    data: { labels: sorted.map(r=>r.date), datasets: [{ data: sorted.map(r=>Number(r.balance)||0), borderColor:'#7F77DD', backgroundColor:'rgba(127,119,221,0.06)', borderWidth:2, pointRadius:0, tension:0.3, fill:true }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { ...darkScales(), x: { ...darkScales().x, ticks: { ...darkScales().x.ticks, maxTicksLimit:8 } } }
+    }
+  });
+
+  const tbody = document.getElementById('txBody');
+  const recent = [...data].sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,100);
+  tbody.innerHTML = recent.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td style="color:#555">${r.time}</td>
+      <td><span class="badge" style="background:${CAT_COLORS[r.category]||'#555'}22;color:${CAT_COLORS[r.category]||'#888'}">${r.category||''}</span></td>
+      <td style="color:#888">${r.counterparty_name||r.counterparty||''}</td>
+      <td style="color:#555;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description||''}</td>
+      <td class="${r.direction==='CREDIT'?'dir-credit':'dir-debit'}">${r.direction}</td>
+      <td style="text-align:right;font-weight:500;color:${r.direction==='CREDIT'?'#1D9E75':'#D85A30'}">TZS ${fmt(r.amount)}</td>
+      <td style="text-align:right;color:#555">TZS ${fmt(r.balance)}</td>
+    </tr>
+  `).join('');
+}
+
+loadData();
+</script>
+</body>
+</html>
